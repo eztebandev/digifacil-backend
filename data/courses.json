@@ -1,0 +1,32 @@
+[
+  {
+    "id": "curso-1",
+    "title": "Computacion desde cero",
+    "description": "Aprende a usar una computadora, navegar por internet y organizar tus archivos con confianza.",
+    "level": "Principiante",
+    "duration": "4 semanas",
+    "modality": "En vivo por Google Meet",
+    "price": "S/ 149",
+    "highlight": true
+  },
+  {
+    "id": "curso-2",
+    "title": "Smartphone sin miedo",
+    "description": "Domina WhatsApp, videollamadas, fotos, seguridad basica y configuraciones utiles en tu celular.",
+    "level": "Basico",
+    "duration": "3 semanas",
+    "modality": "En vivo por Google Meet",
+    "price": "S/ 119",
+    "highlight": false
+  },
+  {
+    "id": "curso-3",
+    "title": "Herramientas digitales para emprender",
+    "description": "Conoce Google Drive, Canva, formularios, pagos y herramientas simples para mejorar tu negocio.",
+    "level": "Intermedio",
+    "duration": "5 semanas",
+    "modality": "En vivo por Google Meet",
+    "price": "S/ 189",
+    "highlight": true
+  }
+]
