@@ -21,6 +21,29 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+function withPgBouncerParams(urlString) {
+  try {
+    const url = new URL(urlString);
+    const isSupabasePooler =
+      url.hostname.includes("pooler.supabase.com") || url.port === "6543";
+
+    if (isSupabasePooler) {
+      if (!url.searchParams.has("pgbouncer")) {
+        url.searchParams.set("pgbouncer", "true");
+      }
+      if (!url.searchParams.has("connection_limit")) {
+        url.searchParams.set("connection_limit", "1");
+      }
+    }
+
+    return url.toString();
+  } catch {
+    return urlString;
+  }
+}
+
+process.env.DATABASE_URL = withPgBouncerParams(process.env.DATABASE_URL);
+
 export const config = {
   appEnv,
   isProdEnvironment,
