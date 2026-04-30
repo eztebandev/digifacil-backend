@@ -3,6 +3,8 @@ import cors from "cors";
 import { config } from "./config.js";
 import coursesRoutes from "./routes/coursesRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+import intranetRoutes from "./routes/intranetRoutes.js";
 
 const app = express();
 
@@ -18,7 +20,9 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/courses", coursesRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/intranet", intranetRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error(error);

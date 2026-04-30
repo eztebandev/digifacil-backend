@@ -1,0 +1,68 @@
+[
+  {
+    "id": "curso-1",
+    "title": "Excel básico para trabajo y estudios",
+    "description": "Aprende Excel desde cero para oficina, estudios, tareas, informes o tu emprendimiento.",
+    "level": "Principiante",
+    "duration": "4 semanas",
+    "modality": "En vivo por Google Meet",
+    "price": "S/ 160",
+    "highlight": true,
+    "groups": [
+      { "id": "curso-1-grupo-abril", "name": "Grupo de Abril", "schedule": "Lunes y Miercoles 7:00 pm - 9:00 pm" },
+      { "id": "curso-1-grupo-abril-2", "name": "Grupo de Abril 2", "schedule": "Sabados 9:00 am - 1:00 pm" }
+    ]
+  },
+  {
+    "id": "curso-2",
+    "title": "Excel para negocios pequeños",
+    "description": "Aprende a controlar ventas, gastos, ingresos, egresos, ganancias y pérdidas de tu negocio usando Excel de forma sencilla.",
+    "level": "Principiante",
+    "duration": "4 semanas",
+    "modality": "En vivo por Google Meet",
+    "price": "S/ 160",
+    "highlight": true,
+    "groups": [
+      { "id": "curso-2-grupo-abril", "name": "Grupo de Abril", "schedule": "Martes y Jueves 7:00 pm - 9:00 pm" }
+    ]
+  },
+  {
+    "id": "curso-3",
+    "title": "Formularios digitales",
+    "description": "Crea formularios, encuestas, registros de inscripción, controles de asistencia y descarga respuestas en Excel fácilmente.",
+    "level": "Principiante",
+    "duration": "4 semanas",
+    "modality": "En vivo por Google Meet",
+    "price": "S/ 100",
+    "highlight": true,
+    "groups": [
+      { "id": "curso-3-grupo-abril", "name": "Grupo de Abril", "schedule": "Viernes 7:00 pm - 9:00 pm" }
+    ]
+  },
+  {
+    "id": "curso-4",
+    "title": "Herramientas digitales para el trabajo y el negocio",
+    "description": "Aprende a organizar archivos, usar correo, WhatsApp, documentos compartidos y herramientas digitales gratuitas para trabajar mejor.",
+    "level": "Principiante",
+    "duration": "4 semanas",
+    "modality": "En vivo por Google Meet",
+    "price": "S/ 160",
+    "highlight": true,
+    "groups": [
+      { "id": "curso-4-grupo-abril", "name": "Grupo de Abril", "schedule": "Martes y Jueves 8:00 pm - 10:00 pm" }
+    ]
+  },
+  {
+    "id": "curso-5",
+    "title": "Computación para todos",
+    "description": "Aprende desde cero a usar la computadora, teclado, mouse, archivos, internet, correo, Word, Excel y WhatsApp Web con confianza.",
+    "level": "Principiante",
+    "duration": "4 semanas",
+    "modality": "En vivo por Google Meet",
+    "price": "S/ 160",
+    "highlight": true,
+    "groups": [
+      { "id": "curso-5-grupo-abril", "name": "Grupo de Abril", "schedule": "Lunes y Miercoles 8:00 pm - 10:00 pm" }
+    ]
+  }
+]

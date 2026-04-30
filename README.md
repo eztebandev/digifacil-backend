@@ -14,15 +14,47 @@ npm install
 
 ## Variables de entorno
 
-Crear un archivo `.env` a partir de `.env.example`.
+Para local usa `.env.dev` y `.env.prod` (no se suben al repo).  
+En Railway configura variables en el dashboard del servicio.
 
 Variables disponibles:
 
+- `APP_ENV`: entorno de ejecucion (`development` o `production`).
+- `DATABASE_URL`: cadena de conexion PostgreSQL (si la defines, tiene prioridad).
+- `DATABASE_URL_DEV`: cadena de conexion PostgreSQL para desarrollo.
+- `DATABASE_URL_PROD`: cadena de conexion PostgreSQL para produccion.
 - `PORT`: puerto del servidor.
 - `CLIENT_URL`: origen permitido para CORS.
 - `JWT_SECRET`: secreto para firmar tokens.
 - `ADMIN_EMAIL`: usuario administrador inicial.
 - `ADMIN_PASSWORD`: password del administrador inicial.
+
+Seleccion de base de datos:
+
+- Si defines `DATABASE_URL`, siempre se usa esa.
+- Si no defines `DATABASE_URL`:
+  - con `APP_ENV=production` (o `NODE_ENV=production`) usa `DATABASE_URL_PROD`.
+  - en cualquier otro caso usa `DATABASE_URL_DEV`.
+
+## Prisma (PostgreSQL / Supabase)
+
+1. Instalar dependencias:
+
+```bash
+npm install
+```
+
+2. Generar cliente Prisma:
+
+```bash
+npm run prisma:generate:dev
+```
+
+3. Crear/aplicar migraciones:
+
+```bash
+npm run prisma:migrate:dev
+```
 
 ## Desarrollo
 
@@ -37,3 +69,27 @@ La API queda disponible en `http://localhost:4000`.
 ```bash
 npm start
 ```
+
+## Railway
+
+Variables recomendadas en Railway:
+
+- `APP_ENV=production`
+- `DATABASE_URL` (recomendado en produccion, prioridad alta)
+- `CLIENT_URL`
+- `JWT_SECRET`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+
+Comandos utiles para produccion:
+
+```bash
+npm run prisma:generate:prod
+npm run prisma:migrate:prod
+```
+
+Flujo recomendado en Railway:
+
+1. Configura variables en Railway: `APP_ENV=production`, `DATABASE_URL`, `CLIENT_URL`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
+2. Deploy command: usa `npm run start:railway` (ya definido en `railway.json`).
+3. Build command: usa `npm run build` (genera cliente Prisma).

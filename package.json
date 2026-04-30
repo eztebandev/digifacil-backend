@@ -4,14 +4,30 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "dev": "npm run dev:app",
+    "dev:app": "APP_ENV=development node --watch src/index.js",
+    "prod:app": "APP_ENV=production node src/index.js",
+    "build": "npx prisma generate",
+    "start:railway": "npm run prisma:migrate:deploy && npm run prod:app",
+    "start": "npm run prod:app",
+    "prisma:generate:dev": "dotenv -e .env.dev -- npx prisma generate",
+    "prisma:generate:prod": "dotenv -e .env.prod -- npx prisma generate",
+    "prisma:migrate:dev": "dotenv -e .env.dev -- npx prisma migrate dev",
+    "prisma:migrate:deploy": "npx prisma migrate deploy",
+    "prisma:migrate:prod": "dotenv -e .env.prod -- npx prisma migrate deploy",
+    "prisma:studio:dev": "dotenv -e .env.dev -- npx prisma studio",
+    "prisma:studio:prod": "dotenv -e .env.prod -- npx prisma studio"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0"
   },
   "dependencies": {
+    "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "prisma": "^5.22.0"
   }
 }
