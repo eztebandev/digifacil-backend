@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Course" ADD COLUMN     "currency" TEXT NOT NULL DEFAULT 'PEN',
+ADD COLUMN     "priceAmount" DECIMAL(10,2) NOT NULL DEFAULT 0;
+

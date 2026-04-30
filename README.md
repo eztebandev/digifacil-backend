@@ -86,10 +86,23 @@ Comandos utiles para produccion:
 ```bash
 npm run prisma:generate:prod
 npm run prisma:migrate:prod
+npm run prisma:seed:prod
 ```
+
+Seed de admin en produccion:
+
+- Usa `ADMIN_EMAIL`, `ADMIN_PASSWORD` y opcionalmente `ADMIN_USERNAME`.
+- El seed es idempotente: crea o actualiza el usuario admin por email.
 
 Flujo recomendado en Railway:
 
 1. Configura variables en Railway: `APP_ENV=production`, `DATABASE_URL`, `CLIENT_URL`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
 2. Deploy command: usa `npm run start:railway` (ya definido en `railway.json`).
 3. Build command: usa `npm run build` (genera cliente Prisma).
+
+
+### Deploy en Railway (recomendado)
+
+1. Start command: `npm run start:railway`
+2. Ejecuta migraciones como tarea separada: `npm run railway:migrate`
+3. Para evitar errores con pooler (`prepared statement \"s0\" already exists`), usa `DATABASE_URL` de conexion directa para migraciones o configura `DIRECT_URL` en Railway y Prisma la usara en migraciones.

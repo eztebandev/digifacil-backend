@@ -8,7 +8,7 @@
     "dev:app": "APP_ENV=development node --watch src/index.js",
     "prod:app": "APP_ENV=production node src/index.js",
     "build": "npx prisma generate",
-    "start:railway": "npm run prisma:migrate:deploy && npm run prod:app",
+    "start:railway": "npm run prod:app",
     "start": "npm run prod:app",
     "prisma:generate:dev": "dotenv -e .env.dev -- npx prisma generate",
     "prisma:generate:prod": "dotenv -e .env.prod -- npx prisma generate",
@@ -16,7 +16,10 @@
     "prisma:migrate:deploy": "npx prisma migrate deploy",
     "prisma:migrate:prod": "dotenv -e .env.prod -- npx prisma migrate deploy",
     "prisma:studio:dev": "dotenv -e .env.dev -- npx prisma studio",
-    "prisma:studio:prod": "dotenv -e .env.prod -- npx prisma studio"
+    "prisma:studio:prod": "dotenv -e .env.prod -- npx prisma studio",
+    "prisma:seed": "npx prisma db seed",
+    "prisma:seed:prod": "dotenv -e .env.prod -- npx prisma db seed",
+    "railway:migrate": "npx prisma migrate deploy"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0"
@@ -29,5 +32,8 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "prisma": "^5.22.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }
