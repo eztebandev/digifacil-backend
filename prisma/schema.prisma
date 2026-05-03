@@ -20,6 +20,8 @@ model Course {
   price       String
   currency    String   @default("PEN")
   priceAmount Decimal  @default(0) @db.Decimal(10, 2)
+  imageUrlSquare String?
+  imageUrlHorizontal String?
   highlight   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

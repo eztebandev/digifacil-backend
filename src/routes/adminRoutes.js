@@ -11,6 +11,12 @@ function buildToken() {
   return jwt.sign({ role: "ADMIN", email: config.adminEmail }, config.jwtSecret, { expiresIn: "8h" });
 }
 
+function normalizeOptionalUrl(value) {
+  if (value == null) return null;
+  const parsed = String(value).trim();
+  return parsed || null;
+}
+
 router.post("/login", (req, res) => {
   const { email, password } = req.body;
   if (email !== config.adminEmail || password !== config.adminPassword) {
@@ -43,6 +49,8 @@ router.post("/courses", authenticateAdmin, async (req, res, next) => {
     if (missing.length) return res.status(400).json({ message: `Completa todos los campos del curso. Faltan: ${missing.join(", ")}` });
     const numericPrice = Number(req.body.priceAmount ?? req.body.price ?? 0);
     if (!Number.isFinite(numericPrice) || numericPrice < 0) return res.status(400).json({ message: "El precio debe ser un numero valido." });
+    const imageUrlSquare = normalizeOptionalUrl(req.body.imageUrlSquare ?? req.body.imageUrl1x1);
+    const imageUrlHorizontal = normalizeOptionalUrl(req.body.imageUrlHorizontal ?? req.body.imageUrl16x9);
     const course = await prisma.course.create({
       data: {
         title: String(title).trim(),
@@ -55,6 +63,8 @@ router.post("/courses", authenticateAdmin, async (req, res, next) => {
         currency: String(currency).trim(),
         priceAmount: numericPrice,
         price: `${String(currency).trim()} ${numericPrice}`,
+        imageUrlSquare,
+        imageUrlHorizontal,
         highlight: Boolean(highlight),
       },
     });
@@ -80,6 +90,8 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
     if (missing.length) return res.status(400).json({ message: `Completa todos los campos del curso. Faltan: ${missing.join(", ")}` });
     const numericPrice = Number(req.body.priceAmount ?? req.body.price ?? 0);
     if (!Number.isFinite(numericPrice) || numericPrice < 0) return res.status(400).json({ message: "El precio debe ser un numero valido." });
+    const imageUrlSquare = normalizeOptionalUrl(req.body.imageUrlSquare ?? req.body.imageUrl1x1);
+    const imageUrlHorizontal = normalizeOptionalUrl(req.body.imageUrlHorizontal ?? req.body.imageUrl16x9);
     const course = await prisma.$transaction(async (tx) => {
       const prev = await tx.course.findUnique({ where: { id: req.params.id } });
       if (!prev) {
@@ -100,6 +112,8 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
           currency: String(currency).trim(),
           priceAmount: numericPrice,
           price: `${String(currency).trim()} ${numericPrice}`,
+          imageUrlSquare,
+          imageUrlHorizontal,
           highlight: Boolean(highlight),
         },
       });
