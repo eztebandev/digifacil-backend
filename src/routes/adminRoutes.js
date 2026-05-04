@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { config } from "../config.js";
 import { authenticateAdmin } from "../middleware/authMiddleware.js";
 import { prisma } from "../lib/prisma.js";
@@ -15,6 +16,27 @@ function normalizeOptionalUrl(value) {
   if (value == null) return null;
   const parsed = String(value).trim();
   return parsed || null;
+}
+
+async function ensureFolderMarkers(courseId, groupId, studentId) {
+  if (!config.supabaseUrl || !config.supabaseServiceRoleKey) return;
+  const markers = [
+    `course-${courseId}/.keep`,
+    `course-${courseId}/group-${groupId}/.keep`,
+    `course-${courseId}/group-${groupId}/student-${studentId}/.keep`,
+  ];
+  for (const marker of markers) {
+    await fetch(`${config.supabaseUrl}/storage/v1/object/digifacil-certificates/${marker}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.supabaseServiceRoleKey}`,
+        apikey: config.supabaseServiceRoleKey,
+        "Content-Type": "text/plain",
+        "x-upsert": "true",
+      },
+      body: "",
+    });
+  }
 }
 
 router.post("/login", (req, res) => {
@@ -167,6 +189,10 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
 
 router.delete("/courses/:id", authenticateAdmin, async (req, res, next) => {
   try {
+    const certCount = await prisma.certificate.count({ where: { courseId: req.params.id } });
+    if (certCount > 0) {
+      return res.status(409).json({ message: "No se puede eliminar el curso porque tiene certificados vinculados." });
+    }
     await prisma.course.delete({ where: { id: req.params.id } });
     res.status(204).send();
   } catch (error) { next(error); }
@@ -210,6 +236,10 @@ router.delete("/users/students/:id", authenticateAdmin, async (req, res, next) =
   try {
     const profile = await prisma.studentProfile.findUnique({ where: { id: req.params.id } });
     if (!profile) return res.status(404).json({ message: "Alumno no encontrado." });
+    const certCount = await prisma.certificate.count({ where: { studentId: req.params.id } });
+    if (certCount > 0) {
+      return res.status(409).json({ message: "No se puede eliminar el alumno porque tiene certificados vinculados." });
+    }
     await prisma.user.delete({ where: { id: profile.userId } });
     res.status(204).send();
   } catch (error) { next(error); }
@@ -260,7 +290,124 @@ router.delete("/users/teachers/:id", authenticateAdmin, async (req, res, next) =
 
 router.get("/groups", authenticateAdmin, async (_req, res, next) => {
   try {
-    res.json(await prisma.courseGroup.findMany({ include: { course: true, teachers: { include: { teacher: true } }, enrollments: { include: { student: { include: { user: true } } } }, sessions: { include: { materials: true }, orderBy: { startAt: "asc" } } }, orderBy: { createdAt: "desc" } }));
+    res.json(await prisma.courseGroup.findMany({ include: { course: true, teachers: { include: { teacher: true } }, enrollments: { include: { student: { include: { user: true } }, certificates: true } }, sessions: { include: { materials: true }, orderBy: { startAt: "asc" } } }, orderBy: { createdAt: "desc" } }));
+  } catch (error) { next(error); }
+});
+
+router.post("/groups/:groupId/students/:studentId/certificate", authenticateAdmin, async (req, res, next) => {
+  try {
+    const { fileName, mimeType, fileBase64 } = req.body || {};
+    const allowedMime = new Set(["image/png", "image/jpeg", "image/jpg"]);
+    if (!fileBase64 || !mimeType || !allowedMime.has(String(mimeType).toLowerCase())) {
+      return res.status(400).json({ message: "Archivo invalido. Solo PNG o JPG." });
+    }
+    if (!config.supabaseUrl || !config.supabaseServiceRoleKey) {
+      return res.status(500).json({ message: "Falta configurar SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY." });
+    }
+    const enrollment = await prisma.groupEnrollment.findUnique({
+      where: { studentId_groupId: { studentId: req.params.studentId, groupId: req.params.groupId } },
+      include: { group: true },
+    });
+    if (!enrollment) return res.status(404).json({ message: "El alumno no esta asignado a este grupo." });
+    const buffer = Buffer.from(String(fileBase64), "base64");
+    const ext = String(mimeType).toLowerCase().includes("png") ? "png" : "jpg";
+    const safeName = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const objectPath = `course-${enrollment.group.courseId}/group-${req.params.groupId}/student-${req.params.studentId}/${safeName}`;
+    await ensureFolderMarkers(enrollment.group.courseId, req.params.groupId, req.params.studentId);
+    const uploadResp = await fetch(`${config.supabaseUrl}/storage/v1/object/digifacil-certificates/${objectPath}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.supabaseServiceRoleKey}`,
+        apikey: config.supabaseServiceRoleKey,
+        "Content-Type": mimeType,
+        "x-upsert": "true",
+      },
+      body: buffer,
+    });
+    if (!uploadResp.ok) {
+      const errText = await uploadResp.text();
+      return res.status(502).json({ message: `No se pudo subir el certificado: ${errText}` });
+    }
+    const publicUrl = `${config.supabaseUrl}/storage/v1/object/public/digifacil-certificates/${objectPath}`;
+    const certificate = await prisma.certificate.upsert({
+      where: { enrollmentId: enrollment.id },
+      update: { certificateUrl: publicUrl, issuedAt: new Date() },
+      create: {
+        enrollmentId: enrollment.id,
+        studentId: req.params.studentId,
+        groupId: req.params.groupId,
+        courseId: enrollment.group.courseId,
+        certificateUrl: publicUrl,
+      },
+    });
+    res.status(201).json(certificate);
+  } catch (error) { next(error); }
+});
+
+router.delete("/groups/:groupId/students/:studentId/certificate", authenticateAdmin, async (req, res, next) => {
+  try {
+    const enrollment = await prisma.groupEnrollment.findUnique({
+      where: { studentId_groupId: { studentId: req.params.studentId, groupId: req.params.groupId } },
+      include: { group: true },
+    });
+    if (!enrollment) return res.status(404).json({ message: "El alumno no esta asignado a este grupo." });
+    const certificates = await prisma.certificate.findMany({ where: { enrollmentId: enrollment.id } });
+    for (const cert of certificates) {
+      const marker = "/storage/v1/object/public/digifacil-certificates/";
+      const idx = String(cert.certificateUrl || "").indexOf(marker);
+      if (idx >= 0 && config.supabaseUrl && config.supabaseServiceRoleKey) {
+        const objectPath = decodeURIComponent(String(cert.certificateUrl).slice(idx + marker.length));
+        await fetch(`${config.supabaseUrl}/storage/v1/object/digifacil-certificates/${objectPath}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${config.supabaseServiceRoleKey}`,
+            apikey: config.supabaseServiceRoleKey,
+          },
+        });
+      }
+    }
+    await prisma.certificate.deleteMany({ where: { enrollmentId: enrollment.id } });
+    if (config.supabaseUrl && config.supabaseServiceRoleKey) {
+      const studentCertCount = await prisma.certificate.count({
+        where: { studentId: req.params.studentId, groupId: req.params.groupId },
+      });
+      if (studentCertCount === 0) {
+        await fetch(`${config.supabaseUrl}/storage/v1/object/digifacil-certificates/course-${enrollment.group.courseId}/group-${req.params.groupId}/student-${req.params.studentId}/.keep`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${config.supabaseServiceRoleKey}`,
+            apikey: config.supabaseServiceRoleKey,
+          },
+        }).catch(() => {});
+      }
+
+      const groupCertCount = await prisma.certificate.count({
+        where: { groupId: req.params.groupId },
+      });
+      if (groupCertCount === 0) {
+        await fetch(`${config.supabaseUrl}/storage/v1/object/digifacil-certificates/course-${enrollment.group.courseId}/group-${req.params.groupId}/.keep`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${config.supabaseServiceRoleKey}`,
+            apikey: config.supabaseServiceRoleKey,
+          },
+        }).catch(() => {});
+      }
+
+      const courseCertCount = await prisma.certificate.count({
+        where: { courseId: enrollment.group.courseId },
+      });
+      if (courseCertCount === 0) {
+        await fetch(`${config.supabaseUrl}/storage/v1/object/digifacil-certificates/course-${enrollment.group.courseId}/.keep`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${config.supabaseServiceRoleKey}`,
+            apikey: config.supabaseServiceRoleKey,
+          },
+        }).catch(() => {});
+      }
+    }
+    res.status(204).send();
   } catch (error) { next(error); }
 });
 
@@ -324,7 +471,14 @@ router.put("/groups/:id", authenticateAdmin, async (req, res, next) => {
 });
 
 router.delete("/groups/:id", authenticateAdmin, async (req, res, next) => {
-  try { await prisma.courseGroup.delete({ where: { id: req.params.id } }); res.status(204).send(); } catch (error) { next(error); }
+  try {
+    const certCount = await prisma.certificate.count({ where: { groupId: req.params.id } });
+    if (certCount > 0) {
+      return res.status(409).json({ message: "No se puede eliminar el grupo porque tiene certificados vinculados." });
+    }
+    await prisma.courseGroup.delete({ where: { id: req.params.id } });
+    res.status(204).send();
+  } catch (error) { next(error); }
 });
 
 router.post("/groups/:groupId/assign-teacher", authenticateAdmin, async (req, res, next) => {
@@ -353,6 +507,14 @@ router.post("/groups/:groupId/assign-student", authenticateAdmin, async (req, re
 
 router.delete("/groups/:groupId/students/:studentId", authenticateAdmin, async (req, res, next) => {
   try {
+    const enrollment = await prisma.groupEnrollment.findUnique({
+      where: { studentId_groupId: { studentId: req.params.studentId, groupId: req.params.groupId } },
+      include: { certificates: true },
+    });
+    if (!enrollment) return res.status(404).json({ message: "Alumno no encontrado en este grupo." });
+    if ((enrollment.certificates || []).length > 0) {
+      return res.status(409).json({ message: "No se puede eliminar al alumno porque tiene certificado registrado en este grupo." });
+    }
     await prisma.groupEnrollment.delete({ where: { studentId_groupId: { studentId: req.params.studentId, groupId: req.params.groupId } } });
     res.status(204).send();
   } catch (error) { next(error); }

@@ -13,7 +13,7 @@ app.use(
     origin: config.clientUrl,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: "12mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });

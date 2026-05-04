@@ -53,4 +53,6 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || "digifacil-super-secret",
   adminEmail: process.env.ADMIN_EMAIL || "admin@digifacil.lat",
   adminPassword: process.env.ADMIN_PASSWORD || "Digifacil2026!",
+  supabaseUrl: process.env.SUPABASE_URL || "",
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
 };

@@ -26,6 +26,7 @@ model Course {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   groups      CourseGroup[]
+  certificates Certificate[]
 }
 
 model User {
@@ -51,6 +52,7 @@ model StudentProfile {
   updatedAt   DateTime     @updatedAt
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   enrollments GroupEnrollment[]
+  certificates Certificate[] @relation("CertificateStudent")
 }
 
 model TeacherProfile {
@@ -75,6 +77,7 @@ model CourseGroup {
   teachers     TeacherGroup[]
   enrollments  GroupEnrollment[]
   sessions     CourseSession[]
+  certificates Certificate[] @relation("CertificateGroup")
 
   @@unique([courseId, name])
 }
@@ -109,10 +112,20 @@ model GroupEnrollment {
 model Certificate {
   id             String       @id @default(cuid())
   enrollmentId   String
+  studentId      String
+  groupId        String
+  courseId       String
   certificateUrl String
   issuedAt       DateTime     @default(now())
   createdAt      DateTime     @default(now())
-  enrollment     GroupEnrollment   @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  enrollment     GroupEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  student        StudentProfile  @relation("CertificateStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  group          CourseGroup     @relation("CertificateGroup", fields: [groupId], references: [id], onDelete: Cascade)
+  course         Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId])
+  @@index([groupId])
+  @@index([studentId])
 }
 
 model CourseSession {
