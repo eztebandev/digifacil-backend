@@ -9,6 +9,13 @@ router.get("/", async (_req, res, next) => {
       where: {
         status: "PUBLIC",
       },
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
       orderBy: {
         createdAt: "desc",
       },

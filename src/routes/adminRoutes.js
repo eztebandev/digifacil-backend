@@ -55,8 +55,30 @@ router.post("/login", (req, res) => {
 
 router.get("/courses", authenticateAdmin, async (_req, res, next) => {
   try {
-    res.json(await prisma.course.findMany({ orderBy: { createdAt: "desc" } }));
+    res.json(await prisma.course.findMany({
+      include: { categories: { include: { category: true } } },
+      orderBy: { createdAt: "desc" },
+    }));
   } catch (error) { next(error); }
+});
+
+router.get("/categories", authenticateAdmin, async (_req, res, next) => {
+  try {
+    const categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
+    res.json(categories);
+  } catch (error) { next(error); }
+});
+
+router.post("/categories", authenticateAdmin, async (req, res, next) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ message: "El nombre de la categoria es obligatorio." });
+    const created = await prisma.category.create({ data: { name } });
+    res.status(201).json(created);
+  } catch (error) {
+    if (error?.code === "P2002") return res.status(409).json({ message: "La categoria ya existe." });
+    next(error);
+  }
 });
 
 router.post("/courses", authenticateAdmin, async (req, res, next) => {
@@ -76,6 +98,8 @@ router.post("/courses", authenticateAdmin, async (req, res, next) => {
     if (!status) missing.push("status");
     if (!Number.isFinite(sessionCount) || sessionCount < 1) missing.push("sessionCount");
     if (!Number.isFinite(hoursPerSession) || hoursPerSession < 1) missing.push("hoursPerSession");
+    const categoryIds = Array.isArray(req.body.categoryIds) ? req.body.categoryIds.filter(Boolean) : [];
+    if (categoryIds.length < 1 || categoryIds.length > 3) missing.push("categoryIds(1-3)");
     if (missing.length) return res.status(400).json({ message: `Completa todos los campos del curso. Faltan: ${missing.join(", ")}` });
     const numericPrice = Number(req.body.priceAmount ?? req.body.price ?? 0);
     if (!Number.isFinite(numericPrice) || numericPrice < 0) return res.status(400).json({ message: "El precio debe ser un numero valido." });
@@ -97,7 +121,11 @@ router.post("/courses", authenticateAdmin, async (req, res, next) => {
         imageUrlHorizontal,
         highlight: Boolean(highlight),
         status,
+        categories: {
+          create: categoryIds.map((categoryId) => ({ categoryId })),
+        },
       },
+      include: { categories: { include: { category: true } } },
     });
     res.status(201).json(course);
   } catch (error) { next(error); }
@@ -120,6 +148,8 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
     if (!status) missing.push("status");
     if (!Number.isFinite(sessionCount) || sessionCount < 1) missing.push("sessionCount");
     if (!Number.isFinite(hoursPerSession) || hoursPerSession < 1) missing.push("hoursPerSession");
+    const categoryIds = Array.isArray(req.body.categoryIds) ? req.body.categoryIds.filter(Boolean) : [];
+    if (categoryIds.length < 1 || categoryIds.length > 3) missing.push("categoryIds(1-3)");
     if (missing.length) return res.status(400).json({ message: `Completa todos los campos del curso. Faltan: ${missing.join(", ")}` });
     const numericPrice = Number(req.body.priceAmount ?? req.body.price ?? 0);
     if (!Number.isFinite(numericPrice) || numericPrice < 0) return res.status(400).json({ message: "El precio debe ser un numero valido." });
@@ -149,7 +179,12 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
           imageUrlHorizontal,
           highlight: Boolean(highlight),
           status,
+          categories: {
+            deleteMany: {},
+            create: categoryIds.map((categoryId) => ({ categoryId })),
+          },
         },
+        include: { categories: { include: { category: true } } },
       });
 
       const groups = await tx.courseGroup.findMany({
