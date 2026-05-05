@@ -6,6 +6,9 @@ const router = Router();
 router.get("/", async (_req, res, next) => {
   try {
     const courses = await prisma.course.findMany({
+      where: {
+        status: "PUBLIC",
+      },
       orderBy: {
         createdAt: "desc",
       },

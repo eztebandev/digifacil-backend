@@ -18,6 +18,12 @@ function normalizeOptionalUrl(value) {
   return parsed || null;
 }
 
+function normalizeCourseStatus(value) {
+  const raw = String(value || "PUBLIC").trim().toUpperCase();
+  if (raw === "PUBLIC" || raw === "PRIVATE" || raw === "DISABLED") return raw;
+  return null;
+}
+
 async function ensureFolderMarkers(courseId, groupId, studentId) {
   if (!config.supabaseUrl || !config.supabaseServiceRoleKey) return;
   const markers = [
@@ -56,6 +62,7 @@ router.get("/courses", authenticateAdmin, async (_req, res, next) => {
 router.post("/courses", authenticateAdmin, async (req, res, next) => {
   try {
     const { title, description, level, highlight } = req.body;
+    const status = normalizeCourseStatus(req.body.status);
     const modality = req.body.modality || req.body.modalidad;
     const currency = req.body.currency || req.body.moneda;
     const sessionCount = Number(req.body.sessionCount);
@@ -66,6 +73,7 @@ router.post("/courses", authenticateAdmin, async (req, res, next) => {
     if (!level) missing.push("level");
     if (!modality) missing.push("modality");
     if (!currency) missing.push("currency");
+    if (!status) missing.push("status");
     if (!Number.isFinite(sessionCount) || sessionCount < 1) missing.push("sessionCount");
     if (!Number.isFinite(hoursPerSession) || hoursPerSession < 1) missing.push("hoursPerSession");
     if (missing.length) return res.status(400).json({ message: `Completa todos los campos del curso. Faltan: ${missing.join(", ")}` });
@@ -88,6 +96,7 @@ router.post("/courses", authenticateAdmin, async (req, res, next) => {
         imageUrlSquare,
         imageUrlHorizontal,
         highlight: Boolean(highlight),
+        status,
       },
     });
     res.status(201).json(course);
@@ -97,6 +106,7 @@ router.post("/courses", authenticateAdmin, async (req, res, next) => {
 router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
   try {
     const { title, description, level, highlight } = req.body;
+    const status = normalizeCourseStatus(req.body.status);
     const modality = req.body.modality || req.body.modalidad;
     const currency = req.body.currency || req.body.moneda;
     const sessionCount = Number(req.body.sessionCount);
@@ -107,6 +117,7 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
     if (!level) missing.push("level");
     if (!modality) missing.push("modality");
     if (!currency) missing.push("currency");
+    if (!status) missing.push("status");
     if (!Number.isFinite(sessionCount) || sessionCount < 1) missing.push("sessionCount");
     if (!Number.isFinite(hoursPerSession) || hoursPerSession < 1) missing.push("hoursPerSession");
     if (missing.length) return res.status(400).json({ message: `Completa todos los campos del curso. Faltan: ${missing.join(", ")}` });
@@ -137,6 +148,7 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
           imageUrlSquare,
           imageUrlHorizontal,
           highlight: Boolean(highlight),
+          status,
         },
       });
 
@@ -189,6 +201,11 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
 
 router.delete("/courses/:id", authenticateAdmin, async (req, res, next) => {
   try {
+    const course = await prisma.course.findUnique({ where: { id: req.params.id } });
+    if (!course) return res.status(404).json({ message: "Curso no encontrado." });
+    if (course.status !== "DISABLED") {
+      return res.status(409).json({ message: "Solo puedes eliminar cursos inhabilitados." });
+    }
     const certCount = await prisma.certificate.count({ where: { courseId: req.params.id } });
     if (certCount > 0) {
       return res.status(409).json({ message: "No se puede eliminar el curso porque tiene certificados vinculados." });

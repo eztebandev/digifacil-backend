@@ -10,7 +10,9 @@ router.get("/teacher/dashboard", async (req, res, next) => {
     if (req.user.role !== "TEACHER") return res.status(403).json({ message: "No tienes permisos para esta accion." });
     const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user.sub }, include: { groups: { include: { group: { include: { course: true, enrollments: { include: { student: { include: { user: true } } } }, sessions: { include: { materials: true }, orderBy: { startAt: "asc" } } } } } } } });
     if (!teacher) return res.status(404).json({ message: "Docente no encontrado." });
-    const groups = teacher.groups.map((g) => ({
+    const groups = teacher.groups
+      .filter((g) => g.group?.course?.status !== "DISABLED")
+      .map((g) => ({
       ...g.group,
       students: g.group.enrollments.map((e) => ({
         id: e.student.id,
@@ -19,7 +21,7 @@ router.get("/teacher/dashboard", async (req, res, next) => {
         phone: e.student.phone,
         email: e.student.user?.email || "",
       })),
-    }));
+      }));
     res.json({ teacher: { id: teacher.id, firstName: teacher.firstName, lastName: teacher.lastName }, groups });
   } catch (e) { next(e); }
 });
@@ -43,7 +45,9 @@ router.get("/teacher/groups", async (req, res, next) => {
       },
     });
     if (!teacher) return res.status(404).json({ message: "Docente no encontrado." });
-    const groups = teacher.groups.map((g) => ({
+    const groups = teacher.groups
+      .filter((g) => g.group?.course?.status !== "DISABLED")
+      .map((g) => ({
       ...g.group,
       students: g.group.enrollments.map((e) => ({
         id: e.student.id,
@@ -52,7 +56,7 @@ router.get("/teacher/groups", async (req, res, next) => {
         phone: e.student.phone,
         email: e.student.user?.email || "",
       })),
-    }));
+      }));
     res.json({ teacher: { id: teacher.id, firstName: teacher.firstName, lastName: teacher.lastName }, groups });
   } catch (e) { next(e); }
 });
@@ -64,6 +68,13 @@ router.get("/teacher/groups/:groupId/sessions", async (req, res, next) => {
     if (!teacher) return res.status(404).json({ message: "Docente no encontrado." });
     const assignment = await prisma.teacherGroup.findUnique({ where: { teacherId_groupId: { teacherId: teacher.id, groupId: req.params.groupId } } });
     if (!assignment) return res.status(403).json({ message: "No tienes este grupo asignado." });
+    const group = await prisma.courseGroup.findUnique({
+      where: { id: req.params.groupId },
+      include: { course: true },
+    });
+    if (!group || group.course?.status === "DISABLED") {
+      return res.status(404).json({ message: "Grupo no disponible." });
+    }
     const sessions = await prisma.courseSession.findMany({
       where: { groupId: req.params.groupId },
       include: { materials: true },
@@ -79,7 +90,9 @@ router.get("/student/dashboard", async (req, res, next) => {
     const student = await prisma.studentProfile.findUnique({ where: { userId: req.user.sub }, include: { enrollments: { include: { certificates: true, group: { include: { course: true, sessions: { include: { materials: true }, orderBy: { startAt: "asc" } }, teachers: { include: { teacher: true } } } } }, orderBy: { createdAt: "desc" } } } });
     if (!student) return res.status(404).json({ message: "Alumno no encontrado." });
     const calendar = student.enrollments.flatMap((en) => en.group.sessions.map((s) => ({ groupId: en.group.id, groupName: en.group.name, courseTitle: en.group.course.title, sessionId: s.id, sessionTitle: s.title, startAt: s.startAt, endAt: s.endAt, meetLink: s.meetLink })));
-    res.json({ student: { id: student.id, firstName: student.firstName, lastName: student.lastName }, enrollments: student.enrollments, calendar });
+    const enabledEnrollments = student.enrollments.filter((en) => en.group?.course?.status !== "DISABLED");
+    const enabledCalendar = enabledEnrollments.flatMap((en) => en.group.sessions.map((s) => ({ groupId: en.group.id, groupName: en.group.name, courseTitle: en.group.course.title, sessionId: s.id, sessionTitle: s.title, startAt: s.startAt, endAt: s.endAt, meetLink: s.meetLink })));
+    res.json({ student: { id: student.id, firstName: student.firstName, lastName: student.lastName }, enrollments: enabledEnrollments, calendar: enabledCalendar });
   } catch (e) { next(e); }
 });
 
@@ -105,7 +118,8 @@ router.get("/student/courses", async (req, res, next) => {
       },
     });
     if (!student) return res.status(404).json({ message: "Alumno no encontrado." });
-    res.json({ student: { id: student.id, firstName: student.firstName, lastName: student.lastName }, enrollments: student.enrollments });
+    const enabledEnrollments = student.enrollments.filter((en) => en.group?.course?.status !== "DISABLED");
+    res.json({ student: { id: student.id, firstName: student.firstName, lastName: student.lastName }, enrollments: enabledEnrollments });
   } catch (e) { next(e); }
 });
 
@@ -124,7 +138,9 @@ router.get("/student/calendar", async (req, res, next) => {
       },
     });
     if (!student) return res.status(404).json({ message: "Alumno no encontrado." });
-    const calendar = student.enrollments.flatMap((en) =>
+    const calendar = student.enrollments
+      .filter((en) => en.group?.course?.status !== "DISABLED")
+      .flatMap((en) =>
       en.group.sessions.map((s) => ({
         groupId: en.group.id,
         groupName: en.group.name,
@@ -156,7 +172,9 @@ router.get("/student/certificates", async (req, res, next) => {
       },
     });
     if (!student) return res.status(404).json({ message: "Alumno no encontrado." });
-    const certificates = student.enrollments.flatMap((en) =>
+    const certificates = student.enrollments
+      .filter((en) => en.group?.course?.status !== "DISABLED")
+      .flatMap((en) =>
       (en.certificates || []).map((cert) => ({
         id: cert.id,
         certificateUrl: cert.certificateUrl,
@@ -186,6 +204,9 @@ router.put("/teacher/groups/:groupId/sessions", async (req, res, next) => {
       include: { course: true },
     });
     if (!group) return res.status(404).json({ message: "Grupo no encontrado." });
+    if (group.course?.status === "DISABLED") {
+      return res.status(403).json({ message: "No puedes gestionar sesiones de un curso inhabilitado." });
+    }
     if (sessions.length > Number(group.course.sessionCount || 1)) {
       return res.status(400).json({
         message: `Este grupo permite maximo ${group.course.sessionCount} sesiones segun el curso.`,
@@ -221,6 +242,13 @@ router.delete("/teacher/groups/:groupId/sessions/:sessionId", async (req, res, n
     const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user.sub } });
     const assignment = await prisma.teacherGroup.findUnique({ where: { teacherId_groupId: { teacherId: teacher.id, groupId } } });
     if (!assignment) return res.status(403).json({ message: "No tienes este grupo asignado." });
+    const group = await prisma.courseGroup.findUnique({
+      where: { id: groupId },
+      include: { course: true },
+    });
+    if (!group || group.course?.status === "DISABLED") {
+      return res.status(404).json({ message: "Grupo no disponible." });
+    }
     const total = await prisma.courseSession.count({ where: { groupId } });
     if (total <= 1) return res.status(400).json({ message: "El grupo debe tener al menos 1 sesion." });
     await prisma.courseSession.delete({ where: { id: sessionId } });

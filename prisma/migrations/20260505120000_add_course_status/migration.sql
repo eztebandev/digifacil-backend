@@ -1,0 +1,4 @@
+CREATE TYPE "CourseStatus" AS ENUM ('PUBLIC', 'PRIVATE', 'DISABLED');
+
+ALTER TABLE "Course"
+ADD COLUMN "status" "CourseStatus" NOT NULL DEFAULT 'PUBLIC';
