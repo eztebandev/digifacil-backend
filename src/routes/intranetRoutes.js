@@ -140,6 +140,39 @@ router.get("/student/calendar", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get("/student/certificates", async (req, res, next) => {
+  try {
+    if (req.user.role !== "STUDENT") return res.status(403).json({ message: "No tienes permisos para esta accion." });
+    const student = await prisma.studentProfile.findUnique({
+      where: { userId: req.user.sub },
+      include: {
+        enrollments: {
+          include: {
+            group: { include: { course: true } },
+            certificates: { orderBy: { issuedAt: "desc" } },
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+    if (!student) return res.status(404).json({ message: "Alumno no encontrado." });
+    const certificates = student.enrollments.flatMap((en) =>
+      (en.certificates || []).map((cert) => ({
+        id: cert.id,
+        certificateUrl: cert.certificateUrl,
+        issuedAt: cert.issuedAt,
+        courseTitle: en.group?.course?.title || "",
+        groupName: en.group?.name || "",
+        studentName: `${student.firstName} ${student.lastName}`,
+      })),
+    );
+    res.json({
+      student: { id: student.id, firstName: student.firstName, lastName: student.lastName },
+      certificates,
+    });
+  } catch (e) { next(e); }
+});
+
 router.put("/teacher/groups/:groupId/sessions", async (req, res, next) => {
   try {
     if (req.user.role !== "TEACHER") return res.status(403).json({ message: "No tienes permisos para esta accion." });
