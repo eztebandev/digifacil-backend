@@ -24,6 +24,55 @@ router.get("/teacher/dashboard", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get("/teacher/groups", async (req, res, next) => {
+  try {
+    if (req.user.role !== "TEACHER") return res.status(403).json({ message: "No tienes permisos para esta accion." });
+    const teacher = await prisma.teacherProfile.findUnique({
+      where: { userId: req.user.sub },
+      include: {
+        groups: {
+          include: {
+            group: {
+              include: {
+                course: true,
+                enrollments: { include: { student: { include: { user: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!teacher) return res.status(404).json({ message: "Docente no encontrado." });
+    const groups = teacher.groups.map((g) => ({
+      ...g.group,
+      students: g.group.enrollments.map((e) => ({
+        id: e.student.id,
+        firstName: e.student.firstName,
+        lastName: e.student.lastName,
+        phone: e.student.phone,
+        email: e.student.user?.email || "",
+      })),
+    }));
+    res.json({ teacher: { id: teacher.id, firstName: teacher.firstName, lastName: teacher.lastName }, groups });
+  } catch (e) { next(e); }
+});
+
+router.get("/teacher/groups/:groupId/sessions", async (req, res, next) => {
+  try {
+    if (req.user.role !== "TEACHER") return res.status(403).json({ message: "No tienes permisos para esta accion." });
+    const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user.sub } });
+    if (!teacher) return res.status(404).json({ message: "Docente no encontrado." });
+    const assignment = await prisma.teacherGroup.findUnique({ where: { teacherId_groupId: { teacherId: teacher.id, groupId: req.params.groupId } } });
+    if (!assignment) return res.status(403).json({ message: "No tienes este grupo asignado." });
+    const sessions = await prisma.courseSession.findMany({
+      where: { groupId: req.params.groupId },
+      include: { materials: true },
+      orderBy: { startAt: "asc" },
+    });
+    res.json({ sessions });
+  } catch (e) { next(e); }
+});
+
 router.get("/student/dashboard", async (req, res, next) => {
   try {
     if (req.user.role !== "STUDENT") return res.status(403).json({ message: "No tienes permisos para esta accion." });
@@ -31,6 +80,63 @@ router.get("/student/dashboard", async (req, res, next) => {
     if (!student) return res.status(404).json({ message: "Alumno no encontrado." });
     const calendar = student.enrollments.flatMap((en) => en.group.sessions.map((s) => ({ groupId: en.group.id, groupName: en.group.name, courseTitle: en.group.course.title, sessionId: s.id, sessionTitle: s.title, startAt: s.startAt, endAt: s.endAt, meetLink: s.meetLink })));
     res.json({ student: { id: student.id, firstName: student.firstName, lastName: student.lastName }, enrollments: student.enrollments, calendar });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/courses", async (req, res, next) => {
+  try {
+    if (req.user.role !== "STUDENT") return res.status(403).json({ message: "No tienes permisos para esta accion." });
+    const student = await prisma.studentProfile.findUnique({
+      where: { userId: req.user.sub },
+      include: {
+        enrollments: {
+          include: {
+            certificates: true,
+            group: {
+              include: {
+                course: true,
+                sessions: { include: { materials: true }, orderBy: { startAt: "asc" } },
+                teachers: { include: { teacher: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+    if (!student) return res.status(404).json({ message: "Alumno no encontrado." });
+    res.json({ student: { id: student.id, firstName: student.firstName, lastName: student.lastName }, enrollments: student.enrollments });
+  } catch (e) { next(e); }
+});
+
+router.get("/student/calendar", async (req, res, next) => {
+  try {
+    if (req.user.role !== "STUDENT") return res.status(403).json({ message: "No tienes permisos para esta accion." });
+    const student = await prisma.studentProfile.findUnique({
+      where: { userId: req.user.sub },
+      include: {
+        enrollments: {
+          include: {
+            group: { include: { course: true, sessions: { orderBy: { startAt: "asc" } } } },
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+    if (!student) return res.status(404).json({ message: "Alumno no encontrado." });
+    const calendar = student.enrollments.flatMap((en) =>
+      en.group.sessions.map((s) => ({
+        groupId: en.group.id,
+        groupName: en.group.name,
+        courseTitle: en.group.course.title,
+        sessionId: s.id,
+        sessionTitle: s.title,
+        startAt: s.startAt,
+        endAt: s.endAt,
+        meetLink: s.meetLink,
+      })),
+    );
+    res.json({ student: { id: student.id, firstName: student.firstName, lastName: student.lastName }, calendar });
   } catch (e) { next(e); }
 });
 
