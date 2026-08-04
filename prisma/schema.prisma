@@ -3,48 +3,108 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model Course {
-  id          String   @id @default(cuid())
-  title       String
-  description String
-  level       String
-  duration    String
-  sessionCount Int      @default(1)
-  hoursPerSession Int   @default(1)
-  modality    String
-  price       String
-  currency    String   @default("PEN")
-  priceAmount Decimal  @default(0) @db.Decimal(10, 2)
-  imageUrlSquare String?
+  id                 String               @id @default(cuid())
+  title              String
+  description        String
+  level              String
+  duration           String
+  sessionCount       Int                  @default(1)
+  hoursPerSession    Int                  @default(1)
+  modality           String
+  price              String
+  currency           String               @default("PEN")
+  priceAmount        Decimal              @default(0) @db.Decimal(10, 2)
+  imageUrlSquare     String?
   imageUrlHorizontal String?
-  highlight   Boolean  @default(false)
-  status      CourseStatus @default(PUBLIC)
+  highlight          Boolean              @default(false)
+  status             CourseStatus         @default(PUBLIC)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  groups             CourseGroup[]
+  certificates       Certificate[]
+  categories         CourseCategory[]
+  detail             CourseDetail?
+  syllabusItems      CourseSyllabusItem[]
+  faqs               CourseFaq[]
+  testimonials       CourseTestimonial[]
+}
+
+model CourseDetail {
+  id                 String   @id @default(cuid())
+  courseId           String   @unique
+  studentProfile     String?
+  outcomes           String?
+  methodology        String?
+  instructorName     String?
+  instructorBio      String?
+  instructorPhotoUrl String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  course             Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model CourseSyllabusItem {
+  id          String   @id @default(cuid())
+  courseId    String
+  session     Int
+  title       String
+  description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  groups      CourseGroup[]
-  certificates Certificate[]
-  categories   CourseCategory[]
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, session])
+  @@index([courseId])
+}
+
+model CourseFaq {
+  id        String   @id @default(cuid())
+  courseId  String
+  question  String
+  answer    String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+}
+
+model CourseTestimonial {
+  id          String   @id @default(cuid())
+  courseId    String
+  studentName String
+  content     String
+  imageUrl    String?
+  workUrl     String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
 }
 
 model Category {
-  id        String @id @default(cuid())
-  name      String @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String           @id @default(cuid())
+  name      String           @unique
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
   courses   CourseCategory[]
 }
 
 model CourseCategory {
-  courseId    String
-  categoryId  String
-  createdAt   DateTime @default(now())
-  course      Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  courseId   String
+  categoryId String
+  createdAt  DateTime @default(now())
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@id([courseId, categoryId])
   @@index([categoryId])
@@ -70,16 +130,16 @@ model User {
 }
 
 model StudentProfile {
-  id          String       @id @default(cuid())
-  userId      String       @unique
-  firstName   String
-  lastName    String
-  phone       String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  enrollments GroupEnrollment[]
-  certificates Certificate[] @relation("CertificateStudent")
+  id           String            @id @default(cuid())
+  userId       String            @unique
+  firstName    String
+  lastName     String
+  phone        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollments  GroupEnrollment[]
+  certificates Certificate[]     @relation("CertificateStudent")
 }
 
 model TeacherProfile {
@@ -93,18 +153,19 @@ model TeacherProfile {
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   groups    TeacherGroup[]
 }
+
 model CourseGroup {
-  id          String            @id @default(cuid())
+  id           String            @id @default(cuid())
   courseId     String
   name         String
   schedule     String
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
   course       Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
   teachers     TeacherGroup[]
   enrollments  GroupEnrollment[]
   sessions     CourseSession[]
-  certificates Certificate[] @relation("CertificateGroup")
+  certificates Certificate[]     @relation("CertificateGroup")
 
   @@unique([courseId, name])
 }
@@ -121,30 +182,30 @@ model TeacherGroup {
 }
 
 model GroupEnrollment {
-  id            String           @id @default(cuid())
-  studentId     String
-  groupId       String
-  status        EnrollmentStatus @default(ACTIVE)
-  startDate     DateTime?
-  endDate       DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  student       StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  group         CourseGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  certificates  Certificate[]
+  id           String           @id @default(cuid())
+  studentId    String
+  groupId      String
+  status       EnrollmentStatus @default(ACTIVE)
+  startDate    DateTime?
+  endDate      DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  student      StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group        CourseGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  certificates Certificate[]
 
   @@unique([studentId, groupId])
 }
 
 model Certificate {
-  id             String       @id @default(cuid())
+  id             String          @id @default(cuid())
   enrollmentId   String
   studentId      String
   groupId        String
   courseId       String
   certificateUrl String
-  issuedAt       DateTime     @default(now())
-  createdAt      DateTime     @default(now())
+  issuedAt       DateTime        @default(now())
+  createdAt      DateTime        @default(now())
   enrollment     GroupEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   student        StudentProfile  @relation("CertificateStudent", fields: [studentId], references: [id], onDelete: Cascade)
   group          CourseGroup     @relation("CertificateGroup", fields: [groupId], references: [id], onDelete: Cascade)
@@ -156,7 +217,7 @@ model Certificate {
 }
 
 model CourseSession {
-  id          String   @id @default(cuid())
+  id          String            @id @default(cuid())
   groupId     String
   title       String
   description String?
@@ -165,23 +226,22 @@ model CourseSession {
   meetLink    String?
   youtubeUrl  String?
   embedUrl    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  group       CourseGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  group       CourseGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
   materials   SessionMaterial[]
 }
 
 model SessionMaterial {
-  id        String    @id @default(cuid())
+  id        String        @id @default(cuid())
   sessionId String
   title     String
   type      MaterialType
   url       String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
   session   CourseSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
-
 
 enum UserRole {
   ADMIN

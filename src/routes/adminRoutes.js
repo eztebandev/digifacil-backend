@@ -24,6 +24,79 @@ function normalizeCourseStatus(value) {
   return null;
 }
 
+const courseAdminInclude = {
+  categories: { include: { category: true } },
+  detail: true,
+  syllabusItems: { orderBy: { session: "asc" } },
+  faqs: { orderBy: { order: "asc" } },
+  testimonials: { orderBy: { order: "asc" } },
+};
+
+function normalizeOptionalText(value) {
+  if (value == null) return null;
+  const parsed = String(value).trim();
+  return parsed || null;
+}
+
+function hasAnyValue(row) {
+  return Object.values(row).some((value) => value != null && String(value).trim() !== "");
+}
+
+function normalizeCourseDetailsPayload(body) {
+  const rawDetail = body.detail || {};
+  const detail = {
+    studentProfile: normalizeOptionalText(rawDetail.studentProfile ?? body.studentProfile),
+    outcomes: normalizeOptionalText(rawDetail.outcomes ?? body.outcomes),
+    methodology: normalizeOptionalText(rawDetail.methodology ?? body.methodology),
+    instructorName: normalizeOptionalText(rawDetail.instructorName ?? body.instructorName),
+    instructorBio: normalizeOptionalText(rawDetail.instructorBio ?? body.instructorBio),
+    instructorPhotoUrl: normalizeOptionalUrl(rawDetail.instructorPhotoUrl ?? body.instructorPhotoUrl),
+  };
+
+  const syllabusItems = Array.isArray(body.syllabusItems)
+    ? body.syllabusItems
+        .map((item) => ({
+          title: normalizeOptionalText(item?.title),
+          description: normalizeOptionalText(item?.description),
+        }))
+        .filter((item) => item.title || item.description)
+        .map((item, index) => ({
+          session: index + 1,
+          title: item.title || `Sesion ${index + 1}`,
+          description: item.description,
+        }))
+    : [];
+
+  const faqs = Array.isArray(body.faqs)
+    ? body.faqs
+        .map((item) => ({
+          question: normalizeOptionalText(item?.question),
+          answer: normalizeOptionalText(item?.answer),
+        }))
+        .filter((item) => item.question && item.answer)
+        .map((item, index) => ({ ...item, order: index + 1 }))
+    : [];
+
+  const testimonials = Array.isArray(body.testimonials)
+    ? body.testimonials
+        .map((item) => ({
+          studentName: normalizeOptionalText(item?.studentName),
+          content: normalizeOptionalText(item?.content),
+          imageUrl: normalizeOptionalUrl(item?.imageUrl),
+          workUrl: normalizeOptionalUrl(item?.workUrl),
+        }))
+        .filter((item) => item.studentName && item.content)
+        .map((item, index) => ({ ...item, order: index + 1 }))
+    : [];
+
+  return {
+    detail: hasAnyValue(detail) ? detail : null,
+    syllabusItems,
+    faqs,
+    testimonials,
+  };
+}
+
 async function ensureFolderMarkers(courseId, groupId, studentId) {
   if (!config.supabaseUrl || !config.supabaseServiceRoleKey) return;
   const markers = [
@@ -56,7 +129,7 @@ router.post("/login", (req, res) => {
 router.get("/courses", authenticateAdmin, async (_req, res, next) => {
   try {
     res.json(await prisma.course.findMany({
-      include: { categories: { include: { category: true } } },
+      include: courseAdminInclude,
       orderBy: { createdAt: "desc" },
     }));
   } catch (error) { next(error); }
@@ -105,6 +178,7 @@ router.post("/courses", authenticateAdmin, async (req, res, next) => {
     if (!Number.isFinite(numericPrice) || numericPrice < 0) return res.status(400).json({ message: "El precio debe ser un numero valido." });
     const imageUrlSquare = normalizeOptionalUrl(req.body.imageUrlSquare ?? req.body.imageUrl1x1);
     const imageUrlHorizontal = normalizeOptionalUrl(req.body.imageUrlHorizontal ?? req.body.imageUrl16x9);
+    const courseDetails = normalizeCourseDetailsPayload(req.body);
     const course = await prisma.course.create({
       data: {
         title: String(title).trim(),
@@ -124,8 +198,12 @@ router.post("/courses", authenticateAdmin, async (req, res, next) => {
         categories: {
           create: categoryIds.map((categoryId) => ({ categoryId })),
         },
+        ...(courseDetails.detail ? { detail: { create: courseDetails.detail } } : {}),
+        ...(courseDetails.syllabusItems.length ? { syllabusItems: { create: courseDetails.syllabusItems } } : {}),
+        ...(courseDetails.faqs.length ? { faqs: { create: courseDetails.faqs } } : {}),
+        ...(courseDetails.testimonials.length ? { testimonials: { create: courseDetails.testimonials } } : {}),
       },
-      include: { categories: { include: { category: true } } },
+      include: courseAdminInclude,
     });
     res.status(201).json(course);
   } catch (error) { next(error); }
@@ -155,6 +233,7 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
     if (!Number.isFinite(numericPrice) || numericPrice < 0) return res.status(400).json({ message: "El precio debe ser un numero valido." });
     const imageUrlSquare = normalizeOptionalUrl(req.body.imageUrlSquare ?? req.body.imageUrl1x1);
     const imageUrlHorizontal = normalizeOptionalUrl(req.body.imageUrlHorizontal ?? req.body.imageUrl16x9);
+    const courseDetails = normalizeCourseDetailsPayload(req.body);
     const course = await prisma.$transaction(async (tx) => {
       const prev = await tx.course.findUnique({ where: { id: req.params.id } });
       if (!prev) {
@@ -184,8 +263,42 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
             create: categoryIds.map((categoryId) => ({ categoryId })),
           },
         },
-        include: { categories: { include: { category: true } } },
+        include: courseAdminInclude,
       });
+
+      if (courseDetails.detail) {
+        await tx.courseDetail.upsert({
+          where: { courseId: req.params.id },
+          create: {
+            courseId: req.params.id,
+            ...courseDetails.detail,
+          },
+          update: courseDetails.detail,
+        });
+      } else {
+        await tx.courseDetail.deleteMany({ where: { courseId: req.params.id } });
+      }
+
+      await tx.courseSyllabusItem.deleteMany({ where: { courseId: req.params.id } });
+      if (courseDetails.syllabusItems.length) {
+        await tx.courseSyllabusItem.createMany({
+          data: courseDetails.syllabusItems.map((item) => ({ ...item, courseId: req.params.id })),
+        });
+      }
+
+      await tx.courseFaq.deleteMany({ where: { courseId: req.params.id } });
+      if (courseDetails.faqs.length) {
+        await tx.courseFaq.createMany({
+          data: courseDetails.faqs.map((item) => ({ ...item, courseId: req.params.id })),
+        });
+      }
+
+      await tx.courseTestimonial.deleteMany({ where: { courseId: req.params.id } });
+      if (courseDetails.testimonials.length) {
+        await tx.courseTestimonial.createMany({
+          data: courseDetails.testimonials.map((item) => ({ ...item, courseId: req.params.id })),
+        });
+      }
 
       const groups = await tx.courseGroup.findMany({
         where: { courseId: req.params.id },
@@ -224,8 +337,11 @@ router.put("/courses/:id", authenticateAdmin, async (req, res, next) => {
           await tx.courseSession.deleteMany({ where: { id: { in: extra.map((s) => s.id) } } });
         }
       }
-      return updated;
-    });
+      return tx.course.findUnique({
+        where: { id: updated.id },
+        include: courseAdminInclude,
+      });
+    }, { maxWait: 10000, timeout: 30000 });
     res.json(course);
   } catch (error) {
     if (error?.code === "P2025") return res.status(404).json({ message: "Curso no encontrado." });
